@@ -2,6 +2,8 @@
 
 A simple tray program for playing one audio file (located at ~/tray-play.ogg) on repeat in the background. For example, if you want rain ambience while also listening on Spotify.
 
+![Screenshot](screenshot.png)
+
 Inspired by [rainymood.com](rainymood.com).
 
 ## Todo
@@ -14,3 +16,4 @@ Inspired by [rainymood.com](rainymood.com).
 - ~~"Paused" icon~~
 - MacOS support
 - Linux support
+- Volume control
