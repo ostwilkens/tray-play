@@ -1,0 +1,3 @@
+id ICON "icon.ico"
+tray-icon ICON "icon.ico"
+tray-icon-paused ICON "icon-paused.ico"
