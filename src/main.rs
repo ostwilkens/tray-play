@@ -1,3 +1,5 @@
+#![windows_subsystem = "windows"]
+
 use rodio::Source;
 use std::fs::File;
 use std::io::BufReader;
