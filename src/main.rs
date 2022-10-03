@@ -1,59 +1,76 @@
-#![windows_subsystem = "windows"]
-
-use rodio::source::Source;
+use rodio::Source;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
-use {std::sync::mpsc, tray_item::TrayItem};
+use trayicon::{Icon, MenuBuilder, TrayIconBuilder};
+use winit::{
+    event::Event,
+    event_loop::{ControlFlow, EventLoop},
+};
 
-enum Message {
-    Quit,
+#[derive(Clone, Eq, PartialEq, Debug)]
+enum Events {
+    Exit,
     TogglePause,
 }
 
 fn main() {
-    let mut tray = TrayItem::new("Tray Play", "tray-icon").unwrap();
-    let mut playing = true;
-    let (tx, rx) = mpsc::sync_channel(1);
+    let event_loop = EventLoop::<Events>::with_user_event();
+    let proxy = event_loop.create_proxy();
 
-    let tx_pause = tx.clone();
-    tray.add_menu_item("Toggle Pause", move || {
-        tx_pause.send(Message::TogglePause).unwrap();
-    })
-    .unwrap();
+    let icon_bytes = include_bytes!("../icon.ico");
 
-    let tx_quit = tx.clone();
-    tray.add_menu_item("Quit", move || {
-        tx_quit.send(Message::Quit).unwrap();
-    })
-    .unwrap();
+    let icon = Icon::from_buffer(icon_bytes, None, None).unwrap();
+    let icon_paused = Icon::from_buffer(include_bytes!("../icon-paused.ico"), None, None).unwrap();
+
+    let mut tray_icon = TrayIconBuilder::new()
+        .sender_winit(proxy)
+        .icon_from_buffer(icon_bytes)
+        .tooltip("Tray Play")
+        .on_click(Events::TogglePause)
+        .menu(
+            MenuBuilder::new()
+                .checkable("Pause", false, Events::TogglePause)
+                .item("E&xit", Events::Exit),
+        )
+        .build()
+        .unwrap();
 
     let file_path = Path::new(&dirs::home_dir().unwrap()).join("tray-play.ogg");
-
     let (_stream, handle) = rodio::OutputStream::try_default().unwrap();
     let sink = rodio::Sink::try_new(&handle).unwrap();
     let file = File::open(file_path).unwrap();
     let source = rodio::Decoder::new(BufReader::new(file)).unwrap();
     sink.append(source.repeat_infinite());
 
-    loop {
-        match rx.recv() {
-            Ok(Message::Quit) => break,
-            Ok(Message::TogglePause) => {
-                if playing {
-                    playing = false;
-                    sink.pause();
-                    tray.set_icon("tray-icon-paused").unwrap();
-                } else {
-                    playing = true;
-                    sink.play();
-                    tray.set_icon("tray-icon").unwrap();
+    event_loop.run(move |event, _, control_flow| {
+        *control_flow = ControlFlow::Wait;
+
+        let _ = tray_icon;
+
+        match event {
+            Event::UserEvent(e) => match e {
+                Events::Exit => *control_flow = ControlFlow::Exit,
+                Events::TogglePause => {
+                    if let Some(was_paused) = tray_icon.get_menu_item_checkable(Events::TogglePause)
+                    {
+                        if was_paused {
+                            sink.play();
+                            tray_icon.set_icon(&icon).unwrap();
+                            tray_icon
+                                .set_menu_item_checkable(Events::TogglePause, false)
+                                .unwrap();
+                        } else {
+                            sink.pause();
+                            tray_icon.set_icon(&icon_paused).unwrap();
+                            tray_icon
+                                .set_menu_item_checkable(Events::TogglePause, true)
+                                .unwrap();
+                        }
+                    }
                 }
-            }
-            _ => {
-                sink.stop();
-                sink.sleep_until_end();
-            }
+            },
+            _ => (),
         }
-    }
+    });
 }
